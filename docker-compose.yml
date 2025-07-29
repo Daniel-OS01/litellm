@@ -8,20 +8,23 @@ services:
     image: ghcr.io/berriai/litellm:main-stable
     #########################################
     ## Uncomment these lines to start proxy with a config.yaml file ##
-    # volumes:
-    #  - ./config.yaml:/app/config.yaml <<- this is missing in the docker-compose file currently
-    # command:
-    #  - "--config=/app/config.yaml"
+    volumes:
+     - ./config.yaml:/app/config.yaml
+    command:
+     - "--config"
+     - "/app/config.yaml"
     ##############################################
     ports:
       - "4000:4000" # Map the container port to the host, change the host port if necessary
     environment:
       DATABASE_URL: "postgresql://llmproxy:dbpassword9090@db:5432/litellm"
+      REDIS_URL: "redis://redis:6379"
       STORE_MODEL_IN_DB: "True" # allows adding models to proxy via UI
     env_file:
       - .env # Load local .env file
     depends_on:
-      - db  # Indicates that this service depends on the 'db' service, ensuring 'db' starts first
+      - db
+      - redis
     healthcheck:  # Defines the health check configuration for the container
       test: [ "CMD-SHELL", "wget --no-verbose --tries=1 http://localhost:4000/health/liveliness || exit 1" ]  # Command to execute for health check
       interval: 30s  # Perform health check every 30 seconds
@@ -47,22 +50,17 @@ services:
       timeout: 5s
       retries: 10
 
-  prometheus:
-    image: prom/prometheus
-    volumes:
-      - prometheus_data:/prometheus
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--storage.tsdb.retention.time=15d"
+  redis:
+    image: redis:7
     restart: always
+    container_name: litellm_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
 
 volumes:
-  prometheus_data:
-    driver: local
   postgres_data:
     name: litellm_postgres_data # Named volume for Postgres data persistence
-
+  redis_data:
+    driver: local
